@@ -43,7 +43,7 @@ select_lb = ("SELECT id as load_balancer_id, balancing_method, "
                     "health_check_target_path, health_check_fail_count, "
                     "health_check_healthy_threshold, "
                     "health_check_unhealthy_threshold, user_id as user_name, "
-                    "project_id as tenant "
+                    "project_id as tenant, protocol "
              "FROM load_balancer lb "
              "WHERE deleted is FALSE "
                      "AND user_id=%(user_name)s "
@@ -72,12 +72,31 @@ select_fixed_ips = ("SELECT j.address FROM instances i, fixed_ips j "
                             "AND i.id=j.id "
                             "AND i.uuid=%s(instance_uuid)s ")
 
+select_lb_instances = ("SELECT i.uuid FROM instances i,"
+                               "load_balancer_instance_association a "
+                       "WHERE i.deleted is FALSE "
+                               "AND i.id=a.instance_id "
+                               "AND a.load_balancer_id=%(load_balancer_id)s;")
+
+select_lb_servernames = ("SELECT id FROM http_server_name "
+                         "WHERE deleted is FALSE "
+                                 "AND load_balancer_id=%(load_balancer_id)s")
+
+def create_lb(*args, **kwargs):
+    pass
 def create_lb(*args, **kwargs):
     pass
 
 def read_lb(*args, **kwargs):
     cnt = cu.execute(select_lb, kwargs)
     lb = cu.fetchone()
+    cnt = cu.execute(select_lb_instances, kwargs)
+    uuids = cu.fetchall()
+    lb['instance_uuids'] = map(lambda x: x['uuid'], uuids)
+    if lb['protocol'] == 'http':
+        cnt = cu.execute(select_lb_servernames, kwargs)
+        server_names = cu.fetchall()
+        lb['http_server_names'] = map(lambda x: x['id'], server_names)
     return lb
 
 def read_lb_list(*args, **kwargs):

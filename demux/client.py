@@ -55,3 +55,17 @@ if __name__ == '__main__':
     print '>', msg_body
     print '<', ack
     print
+
+
+    msg_body = {'cmd': 'delete_lb',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': "lzyeval",
+                        'tenant': "weipan",
+                        'load_balancer_id': "myHTTPlb",
+                       }
+               }
+    ack = client.send(msg_type, msg_id, msg_body)
+    print
+    print '>', msg_body
+    print '<', ack
+    print

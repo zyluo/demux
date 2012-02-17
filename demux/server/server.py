@@ -67,7 +67,7 @@ while True:
                 pass
         handler.send_multipart([msg_type, msg_id,
                                 json.dumps({'cmd': cmd,
-                                            'msg': json.dumps(cli_msg_body)})])
+                                            'msg': cli_msg_body})])
         print 'b>', msg_id
     if socks.get(feedback) == zmq.POLLIN:
         report = feedback.recv_multipart()
