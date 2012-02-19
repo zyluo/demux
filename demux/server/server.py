@@ -51,9 +51,11 @@ while True:
                 raise Exception("Invalid command")
             # access db and get return msg
             db_msg_body = getattr(db, cmd)(**msg)
+            print db_msg_body
             code = 200
             desc = 'OK'
         except Exception, e:
+            print e
             code = 500
             desc = str(e)
         # make msg to client and worker

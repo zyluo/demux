@@ -24,48 +24,86 @@ class Client(object):
 if __name__ == '__main__':
     # Initialize random number generator
     random.seed()
-    msg_body = {'cmd': 'read_lb_list',
-                'dest': random.choice(['ALL', '1', '2', '3']),
-                'msg': {'user_name': "lzyeval",
-                        'tenant': "weipan",
-                       }
-               }
 
     # Make message
-    msg_type = 'lb'
-    msg_id = str(uuid.uuid1())
+    _msg_type = 'lb'
+    _msg_id = str(uuid.uuid1())
 
     client = Client(protocol='tcp', host='localhost', port='5557')
-    ack = client.send(msg_type, msg_id, msg_body)
+    """
+    _msg_body = {'cmd': 'read_lb_list',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': "lzyeval",
+                        'tenant': "weipan",
+                       }
+               }
+
+    ack = client.send(_msg_type, _msg_id, _msg_body)
 
     print
-    print '>', msg_body
+    print '>', _msg_body
     print '<', ack
     print
 
-    msg_body = {'cmd': 'read_lb',
+    _msg_body = {'cmd': 'read_lb',
                 'dest': random.choice(['ALL', '1', '2', '3']),
                 'msg': {'user_name': "lzyeval",
                         'tenant': "weipan",
                         'load_balancer_id': "myHTTPlb",
                        }
                }
-    ack = client.send(msg_type, msg_id, msg_body)
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
     print
-    print '>', msg_body
+    print '>', _msg_body
+    print '<', ack
+    print
+    """
+
+    _msg_body = {'cmd': 'delete_lb',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': 'lzyeval',
+                        'tenant': 'weipan',
+                        'load_balancer_id': 'myLB',
+                        'protocol': 'http',
+                        'listen_port': 80,
+                        'instance_port': 9592,
+                        'balancing_method': 'round_robin',
+                        'health_check_timeout_ms': 5,
+                        'health_check_interval_ms': 0.5,
+                        'health_check_target_path': '/',
+                        'health_check_fail_count': 2,
+                        'instance_uuids': ["a-uuid", "b-uuid", "c-uuid"],
+                        'http_server_names': ['www.xxx.com', 'www.yyy.com'],
+                       }
+               }
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
+    print
+    print '>', _msg_body
     print '<', ack
     print
 
-
-    msg_body = {'cmd': 'delete_lb',
+    _msg_body = {'cmd': 'create_lb',
                 'dest': random.choice(['ALL', '1', '2', '3']),
-                'msg': {'user_name': "lzyeval",
-                        'tenant': "weipan",
-                        'load_balancer_id': "myHTTPlb",
+                'msg': {'user_name': 'lzyeval',
+                        'tenant': 'weipan',
+                        'load_balancer_id': 'myLB',
+                        'protocol': 'http',
+                        'listen_port': 80,
+                        'instance_port': 9592,
+                        'balancing_method': 'round_robin',
+                        'health_check_timeout_ms': 5,
+                        'health_check_interval_ms': 0.5,
+                        'health_check_target_path': '/',
+                        'health_check_fail_count': 2,
+                        'instance_uuids': ["a-uuid", "b-uuid", "c-uuid"],
+                        'http_server_names': ['www.xxx.com', 'www.yyy.com'],
                        }
                }
-    ack = client.send(msg_type, msg_id, msg_body)
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
     print
-    print '>', msg_body
+    print '>', _msg_body
     print '<', ack
     print
