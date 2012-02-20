@@ -4,8 +4,8 @@ import MySQLdb
 import MySQLdb.cursors
 
 db = MySQLdb.connect(host="localhost", passwd="passwd",
-                   user="nova", db="nova",
-                   cursorclass=MySQLdb.cursors.DictCursor) 
+                     user="nova", db="nova",
+                     cursorclass=MySQLdb.cursors.DictCursor) 
 cu = db.cursor()
 
 """
@@ -14,11 +14,13 @@ insert_lb = ("INSERT INTO load_balancer (id) VALUES (%(load_balancer_id)s);")
 cnt_instances = ("SELECT COUNT(*) FROM load_balancer_instance_association "
                  "WHERE deleted is FALSE "
                          "AND load_balancer_id=%(load_balancer_id)s")
-
-cnt_http_server_names = ("SELECT COUNT(*) FROM http_server_name "
-                         "WHERE deleted is FALSE "
-                                 "AND load_balancer_id=%(load_balancer_id)s")
 """
+
+select_http_server_names = ("SELECT id FROM http_server_name "
+                            "WHERE deleted is FALSE;")
+
+select_listen_ports = ("SELECT listen_port FROM load_balancer "
+                            "WHERE deleted is FALSE;")
 
 select_lb = ("SELECT id as load_balancer_id, balancing_method, "
                     "health_check_timeout_ms, health_check_interval_ms, "
@@ -135,16 +137,25 @@ def create_lb(*args, **kwargs):
     # TODO(lzyeval): check dup
     cnt = cu.execute(cnt_lb, kwargs)
     lb_cnt = cu.fetchone().get('lb_cnt', 0)
+    cnt = cu.execute(select_http_server_names, kwargs)
+    acc_http_server_names = map(lambda x: x['id'], cu.fetchall())
+    cnt = cu.execute(select_listen_ports, kwargs)
+    acc_listen_ports= map(lambda x: x['listen_port'], cu.fetchall())
     if lb_cnt:
         raise Exception('lb already exists')
+    hsns = kwargs.get('http_server_names', [])
+    for h in hsns:
+        if h in acc_http_server_names:
+            raise Exception('%s server name already exists' % h)
+    lp = kwargs.get('listen_port')
+    if lp in acc_listen_ports:
+        raise Exception('%s port already exists' % lp)
     else:
         cnt = cu.execute(hard_delete_lb_config, kwargs)
         db.commit()
         update_lb_config(*args, **kwargs)
         update_lb_instances(*args, **kwargs)
-        """
         update_lb_http_server_names(*args, **kwargs)
-        """
     instance_ips = list()
     for uuid in kwargs.get('instance_uuids', []):
         cnt = cu.execute(select_fixed_ips, uuid)
