@@ -33,8 +33,8 @@ if __name__ == '__main__':
     """
     _msg_body = {'cmd': 'read_lb_list',
                 'dest': random.choice(['ALL', '1', '2', '3']),
-                'msg': {'user_name': "lzyeval",
-                        'tenant': "weipan",
+                'msg': {'user_name': "demo",
+                        'tenant': "demo",
                        }
                }
 
@@ -47,8 +47,8 @@ if __name__ == '__main__':
 
     _msg_body = {'cmd': 'read_lb',
                 'dest': random.choice(['ALL', '1', '2', '3']),
-                'msg': {'user_name': "lzyeval",
-                        'tenant': "weipan",
+                'msg': {'user_name': "demo",
+                        'tenant': "demo",
                         'load_balancer_id': "myHTTPlb",
                        }
                }
@@ -62,15 +62,15 @@ if __name__ == '__main__':
 
     _msg_body = {'cmd': 'delete_lb',
                 'dest': random.choice(['ALL', '1', '2', '3']),
-                'msg': {'user_name': 'lzyeval',
-                        'tenant': 'weipan',
+                'msg': {'user_name': 'demo',
+                        'tenant': 'demo',
                         'load_balancer_id': 'myLB',
-                        'protocol': 'http',
-                        'listen_port': 80,
+                        'protocol': 'tcp',
+                        'listen_port': 10101,
                         'instance_port': 9592,
                         'balancing_method': 'round_robin',
                         'health_check_timeout_ms': 5,
-                        'health_check_interval_ms': 0.5,
+                        'health_check_interval_ms': 500,
                         'health_check_target_path': '/',
                         'health_check_fail_count': 2,
                         'instance_uuids': ["a-uuid", "b-uuid", "c-uuid"],
@@ -86,18 +86,42 @@ if __name__ == '__main__':
 
     _msg_body = {'cmd': 'create_lb',
                 'dest': random.choice(['ALL', '1', '2', '3']),
-                'msg': {'user_name': 'lzyeval',
-                        'tenant': 'weipan',
+                'msg': {'user_name': 'demo',
+                        'tenant': 'demo',
                         'load_balancer_id': 'myLB',
-                        'protocol': 'http',
-                        'listen_port': 80,
+                        'protocol': 'tcp',
+                        'listen_port': 10101,
                         'instance_port': 9592,
                         'balancing_method': 'round_robin',
                         'health_check_timeout_ms': 5,
-                        'health_check_interval_ms': 0.5,
+                        'health_check_interval_ms': 500,
                         'health_check_target_path': '/',
                         'health_check_fail_count': 2,
-                        'instance_uuids': ["a-uuid", "b-uuid", "c-uuid"],
+                        'instance_uuids': ["681500b4-d08c-4208-83b3-68b2b57c1e23"],
+                        'http_server_names': ['www.xxx.com', 'www.yyy.com'],
+                       }
+               }
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
+    print
+    print '>', _msg_body
+    print '<', ack
+    print
+
+    _msg_body = {'cmd': 'update_lb_config',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': 'demo',
+                        'tenant': 'demo',
+                        'load_balancer_id': 'myLB',
+                        'protocol': 'tcp',
+                        'listen_port': 10101,
+                        'instance_port': 9592,
+                        'balancing_method': 'round_robin',
+                        'health_check_timeout_ms': 5,
+                        'health_check_interval_ms': 500,
+                        'health_check_target_path': '/',
+                        'health_check_fail_count': 2,
+                        'instance_uuids': ["681500b4-d08c-4208-83b3-68b2b57c1e23"],
                         'http_server_names': ['www.xxx.com', 'www.yyy.com'],
                        }
                }

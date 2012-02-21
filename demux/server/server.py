@@ -25,53 +25,59 @@ feedback = context.socket(zmq.PULL)
 feedback.bind("tcp://*:5559")
 
 poller = zmq.Poller()
-poller.register(handler, zmq.POLLIN|zmq.POLLOUT)
+poller.register(handler, zmq.POLLIN | zmq.POLLOUT)
 poller.register(feedback, zmq.POLLIN)
 
-message = None
 msg_type = None
 msg_id = None
 msg_json = None
 msg_body = None
 code = 0
 desc = "OK"
+
+
+def get_work_msg(cmd, **msg):
+    res = db.read_whole_lb(**msg)
+    if cmd == "delete_lb":
+        res = dict(filter(lambda (x, y): x in ['user_name', 'tenant',
+                                               'load_balancer_id',
+                                               'protocol'], res.items()))
+    return res
+
+
 while True:
     socks = dict(poller.poll())
     if socks.get(handler) == zmq.POLLIN:
         msg_type, msg_id, msg_json = handler.recv_multipart()
         msg_body = json.loads(msg_json)
     if socks.get(handler) == zmq.POLLOUT:
-        cmd = "asdf"
+        cli_msg = None
+        work_msg = None
         try:
             cmd = msg_body['cmd']
             msg = msg_body['msg']
-            if cmd not in ['create_lb', 'delete_lb', 'read_lb', 'read_lb_list',
-                           'update_lb_config', 'update_lb_instances',
-                           'update_lb_http_server_names']:
-                raise Exception("Invalid command")
             # access db and get return msg
-            db_msg_body = getattr(db, cmd)(**msg)
-            print db_msg_body
-            code = 200
-            desc = 'OK'
-        except Exception, e:
-            print e
-            code = 500
-            desc = str(e)
-        # make msg to client and worker
-        cli_msg_body = {'code': code, 'desc': desc}
-        if code == 200:
+            cli_msg = {'code': 200, 'desc': 'OK'}
             if cmd in ['read_lb', 'read_lb_list']:
-                db_msg_body.update(cli_msg_body)
-                cli_msg_body = db_msg_body
+                db_res = getattr(db, cmd)(**msg)
+                cli_msg.update(db_res)
+            elif cmd in ['create_lb', 'delete_lb', 'update_lb_config',
+                         'update_lb_instances', 'update_lb_http_server_names']:
+                work_cmd = "update_lb" if cmd.startswith("update_lb") else cmd
+                work_msg = get_work_msg(cmd, **msg)
+                broadcast.send_multipart([msg_type, msg_id,
+                                          json.dumps({'cmd': work_cmd,
+                                                      'msg': work_msg})])
+                getattr(db, cmd)(**msg)
             else:
-                #broadcast.send_multipart([msg_type, msg_id, msg_body])
-                pass
+                raise Exception("Invalid command")
+        except Exception, e:
+            cli_msg = {'code': 500, 'desc': str(e)}
         handler.send_multipart([msg_type, msg_id,
                                 json.dumps({'cmd': cmd,
-                                            'msg': cli_msg_body})])
-        print 'b>', msg_id
+                                            'msg': cli_msg})])
+        print 'h<', cmd, cli_msg
     if socks.get(feedback) == zmq.POLLIN:
         report = feedback.recv_multipart()
         # handle feedback
-        print 'f<', report
+        print 'w>', report
