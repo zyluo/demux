@@ -14,16 +14,17 @@ select_http_server_names = ("SELECT id FROM http_server_name "
 select_listen_ports = ("SELECT listen_port FROM load_balancer "
                        "WHERE deleted is FALSE;")
 
-select_lb = ("SELECT id as load_balancer_id, protocol, "
+select_lb = ("SELECT user_id as user_name, project_id as tenant, "
+                    "id as load_balancer_id, protocol, "
                     "listen_port, instance_port, balancing_method, "
                     "health_check_timeout_ms, health_check_interval_ms, "
                     "health_check_target_path, health_check_fail_count, "
                     "health_check_healthy_threshold, "
-                    "health_check_unhealthy_threshold, user_id as user_name, "
-                    "project_id as tenant, protocol "
+                    "health_check_unhealthy_threshold "
              "FROM load_balancer lb "
-             "WHERE deleted is FALSE "
-                     "AND user_id=%(user_name)s "
+             #"WHERE deleted is FALSE "
+                     #"AND user_id=%(user_name)s "
+                     "WHERE user_id=%(user_name)s "
                      "AND project_id=%(tenant)s "
                      "AND id=%(load_balancer_id)s;")
 
@@ -46,7 +47,7 @@ delete_lb_config = ("UPDATE load_balancer SET deleted=True "
 
 delete_instances = ("UPDATE load_balancer_instance_association "
                     "SET deleted=True "
-                    "WHERE load_balancer_id=%(load_balancer_id)s ")
+                    "WHERE load_balancer_id=%(load_balancer_id)s;")
 
 delete_http_server_names = ("UPDATE http_server_name SET deleted=True "
                             "WHERE load_balancer_id=%(load_balancer_id)s;")
@@ -77,6 +78,7 @@ select_fixed_ips = ("SELECT j.address FROM instances i, fixed_ips j "
 select_lb_instances = ("SELECT i.uuid FROM instances i,"
                                "load_balancer_instance_association a "
                        "WHERE i.deleted is FALSE "
+                               "AND a.deleted is FALSE "
                                "AND i.id=a.instance_id "
                                "AND a.load_balancer_id=%(load_balancer_id)s;")
 
@@ -166,6 +168,8 @@ def read_lb(*args, **kwargs):
         cnt = cu.execute(select_lb_servernames, kwargs)
         server_names = cu.fetchall()
         lb['http_server_names'] = map(lambda x: x['id'], server_names)
+    else:
+        lb['http_server_names'] = []
     return lb
 
 def read_lb_list(*args, **kwargs):
@@ -176,6 +180,8 @@ def read_lb_list(*args, **kwargs):
             "tenant": kwargs.get("tenant")}
 
 def update_lb_config(*args, **kwargs):
+    if kwargs.get('listen_port') is None:
+        kwargs['listen_port'] = 80
     if kwargs.get('protocol') == 'http':
         kwargs['health_check_healthy_threshold'] = 0
         kwargs['health_check_unhealthy_threshold'] = 0
@@ -211,6 +217,15 @@ def update_lb_instances(*args, **kwargs):
 
 
 def update_lb_http_server_names(*args, **kwargs):
+    cnt = cu.execute(select_http_server_names, kwargs)
+    acc_http_server_names = map(lambda x: x['id'], cu.fetchall())
+    cnt = cu.execute(select_lb_servernames, kwargs)
+    bcc_http_server_names = map(lambda x: x['id'], cu.fetchall())
+    acc_http_server_names = filter(lambda x: x not in bcc_http_server_names, acc_http_server_names)
+    hsns = kwargs.get('http_server_names', [])
+    for h in hsns:
+        if h in acc_http_server_names:
+            raise Exception('%s server name already exists' % h)
     cnt = cu.execute(delete_http_server_names, kwargs)
     db.commit()
     https = kwargs.get('http_server_names', [])

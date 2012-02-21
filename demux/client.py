@@ -65,7 +65,7 @@ if __name__ == '__main__':
                 'msg': {'user_name': 'demo',
                         'tenant': 'demo',
                         'load_balancer_id': 'myLB',
-                        'protocol': 'tcp',
+                        'protocol': 'http',
                         'listen_port': 10101,
                         'instance_port': 9592,
                         'balancing_method': 'round_robin',
@@ -89,7 +89,7 @@ if __name__ == '__main__':
                 'msg': {'user_name': 'demo',
                         'tenant': 'demo',
                         'load_balancer_id': 'myLB',
-                        'protocol': 'tcp',
+                        'protocol': 'http',
                         'listen_port': 10101,
                         'instance_port': 9592,
                         'balancing_method': 'round_robin',
@@ -113,7 +113,7 @@ if __name__ == '__main__':
                 'msg': {'user_name': 'demo',
                         'tenant': 'demo',
                         'load_balancer_id': 'myLB',
-                        'protocol': 'tcp',
+                        'protocol': 'http',
                         'listen_port': 10101,
                         'instance_port': 9592,
                         'balancing_method': 'round_robin',
@@ -125,6 +125,71 @@ if __name__ == '__main__':
                         'http_server_names': ['www.xxx.com', 'www.yyy.com'],
                        }
                }
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
+    print
+    print '>', _msg_body
+    print '<', ack
+    print
+
+
+    _msg_body = {'cmd': 'update_lb_instances',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': 'demo',
+                        'tenant': 'demo',
+                        'load_balancer_id': 'myLB',
+                        'protocol': 'http',
+                        'listen_port': 10101,
+                        'instance_port': 9592,
+                        'balancing_method': 'round_robin',
+                        'health_check_timeout_ms': 5,
+                        'health_check_interval_ms': 500,
+                        'health_check_target_path': '/',
+                        'health_check_fail_count': 2,
+                        'instance_uuids': ["681500b4-d08c-4208-83b3-68b2b57c1e23"],
+                        'http_server_names': ['www.xxx.com', 'www.yyy.com'],
+                       }
+               }
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
+    print
+    print '>', _msg_body
+    print '<', ack
+    print
+
+
+    _msg_body = {'cmd': 'update_lb_http_server_names',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': 'demo',
+                        'tenant': 'demo',
+                        'load_balancer_id': 'myLB',
+                        'protocol': 'http',
+                        'listen_port': 10101,
+                        'instance_port': 9592,
+                        'balancing_method': 'round_robin',
+                        'health_check_timeout_ms': 5,
+                        'health_check_interval_ms': 500,
+                        'health_check_target_path': '/',
+                        'health_check_fail_count': 2,
+                        'instance_uuids': ["681500b4-d08c-4208-83b3-68b2b57c1e23"],
+                        'http_server_names': ['www.xxx.com', 'www.yyy.com'],
+                       }
+               }
+    ack = client.send(_msg_type, _msg_id, _msg_body)
+
+    print
+    print '>', _msg_body
+    print '<', ack
+    print
+
+    _msg_body = {'cmd': 'read_lb',
+                'dest': random.choice(['ALL', '1', '2', '3']),
+                'msg': {'user_name': "demo",
+                        'tenant': "demo",
+                        'load_balancer_id': "myLB",
+                       }
+               }
+
     ack = client.send(_msg_type, _msg_id, _msg_body)
 
     print

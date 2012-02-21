@@ -56,6 +56,10 @@ while True:
         try:
             cmd = msg_body['cmd']
             msg = msg_body['msg']
+            print "---------------------------------------------------"
+            print
+            print ">> from client %s -> %s" % (cmd, msg)
+            print
             # access db and get return msg
             cli_msg = {'code': 200, 'desc': 'OK'}
             if cmd in ['read_lb', 'read_lb_list']:
@@ -63,20 +67,23 @@ while True:
                 cli_msg.update(db_res)
             elif cmd in ['create_lb', 'delete_lb', 'update_lb_config',
                          'update_lb_instances', 'update_lb_http_server_names']:
+                getattr(db, cmd)(**msg)
                 work_cmd = "update_lb" if cmd.startswith("update_lb") else cmd
                 work_msg = get_work_msg(cmd, **msg)
+                print ">> to worker %s %s -> %s" % (msg_id, work_cmd, work_msg)
+                print
                 broadcast.send_multipart([msg_type, msg_id,
                                           json.dumps({'cmd': work_cmd,
                                                       'msg': work_msg})])
-                getattr(db, cmd)(**msg)
             else:
                 raise Exception("Invalid command")
         except Exception, e:
             cli_msg = {'code': 500, 'desc': str(e)}
+        print ">> to client %s %s -> %s" % (msg_id, cmd, cli_msg)
+        print
         handler.send_multipart([msg_type, msg_id,
                                 json.dumps({'cmd': cmd,
                                             'msg': cli_msg})])
-        print 'h<', cmd, cli_msg
     if socks.get(feedback) == zmq.POLLIN:
         report = feedback.recv_multipart()
         # handle feedback
