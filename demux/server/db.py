@@ -1,20 +1,30 @@
 #!/usr/bin/env python
 
+import threading
+
 import MySQLdb
 import MySQLdb.cursors
 
-db = MySQLdb.connect(host="localhost", passwd="sina2012",
-                   user="root", db="nova",
+rlock = threading.RLock()
+
+db = MySQLdb.connect(host="localhost", passwd="passwd",
+                   user="nova", db="nova",
                    cursorclass=MySQLdb.cursors.DictCursor) 
 cu = db.cursor()
+
+select_max_port = ("SELECT MAX(listen_port)+1 as max_port FROM load_balancer "
+                   "WHERE deleted is FALSE "
+                       "AND listen_port > 10000;")
+
+select_max_del_port = ("SELECT MAX(listen_port) as max_del_port "
+                       "FROM load_balancer "
+                       "WHERE deleted is TRUE "
+                           "AND listen_port > 10000;")
 
 select_http_server_names = ("SELECT id FROM http_server_name "
                             "WHERE deleted is FALSE;")
 
-select_listen_ports = ("SELECT listen_port FROM load_balancer "
-                       "WHERE deleted is FALSE;")
-
-select_lb = ("SELECT user_id as user_name, project_id as tenant, "
+select_lb = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                     "id as load_balancer_id, protocol, "
                     "listen_port, instance_port, balancing_method, "
                     "health_check_timeout_ms, health_check_interval_ms, "
@@ -35,6 +45,10 @@ select_lb_list = ("SELECT id as load_balancer_id, protocol, listen_port, "
                         "AND user_id=%(user_name)s "
                         "AND project_id=%(tenant)s;")
 
+select_lb_ids = ("SELECT id as load_balacer_id FROM load_balancer "
+                 "WHERE deleted is FALSE "
+                         "AND id=%(load_balancer_id)s")
+
 cnt_lb = ("SELECT COUNT(*) as lb_cnt FROM load_balancer "
           "WHERE deleted is FALSE "
                   "AND id=%(load_balancer_id)s")
@@ -51,24 +65,6 @@ delete_instances = ("UPDATE load_balancer_instance_association "
 
 delete_http_server_names = ("UPDATE http_server_name SET deleted=True "
                             "WHERE load_balancer_id=%(load_balancer_id)s;")
-
-"""
-insert_lb = ("INSERT INTO load_balancer (id) VALUES (%(load_balancer_id)s);")
-
-cnt_instances = ("SELECT COUNT(*) FROM load_balancer_instance_association "
-                 "WHERE deleted is FALSE "
-                         "AND load_balancer_id=%(load_balancer_id)s")
-
-select_instance_project = ("SELECT count(*) FROM user_project_association "
-                           "WHERE deleted is FALSE "
-                                   "AND user_id=%(user_id)s "
-                                   "AND project_id=%(tenant)s;")
-
-select_http_servers = ("SELECT count(*) FROM user_project_association "
-                           "WHERE deleted is FALSE "
-                                   "AND user_id=%(user_id)s "
-                                   "AND project_id=%(tenant)s;")
-"""
 
 select_fixed_ips = ("SELECT j.address FROM instances i, fixed_ips j "
                     "WHERE i.deleted is FALSE "
@@ -135,32 +131,78 @@ _update_lb_http_server_name = ("INSERT INTO http_server_name "
                                        "deleted=FALSE;")
 
 def create_lb(*args, **kwargs):
-    # TODO(lzyeval): check dup
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        'protocol',
+        'instance_port',
+        'balancing_method',
+        'health_check_timeout_ms',
+        'health_check_interval_ms',
+        'health_check_target_path',
+        'health_check_fail_count',
+        'health_check_healthy_threshold',
+        'health_check_unhealthy_threshold',
+        'instance_uuids',
+        'http_server_names'
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
     cnt = cu.execute(cnt_lb, kwargs)
     lb_cnt = cu.fetchone().get('lb_cnt', 0)
-    cnt = cu.execute(select_http_server_names, kwargs)
-    acc_http_server_names = map(lambda x: x['id'], cu.fetchall())
-    cnt = cu.execute(select_listen_ports, kwargs)
-    acc_listen_ports= map(lambda x: x['listen_port'], cu.fetchall())
     if lb_cnt:
         raise Exception('Load balancer name already exists')
-    hsns = kwargs.get('http_server_names', [])
-    for h in hsns:
-        if h in acc_http_server_names:
-            raise Exception('%s server name already exists' % h)
-    lp = kwargs.get('listen_port')
-    if lp in acc_listen_ports and kwargs['protocol'] == "tcp":
-        raise Exception('%s port already exists' % lp)
-    else:
-        cnt = cu.execute(hard_delete_lb_config, kwargs)
-        db.commit()
-        update_lb_config(*args, **kwargs)
-        update_lb_instances(*args, **kwargs)
-        update_lb_http_server_names(*args, **kwargs)
+    cnt = cu.execute(hard_delete_lb_config, kwargs)
+    db.commit()
 
-def read_lb(*args, **kwargs):
+    if kwargs['instance_port'] < 1 or kwargs['instance_port'] > 65535:
+        raise Exception("Instance port out of range")
+    with rlock:
+        protocol = kwargs['protocol']
+        if protocol == "tcp":
+            _x = kwargs['health_check_healthy_threshold']
+            _y = kwargs['health_check_unhealthy_threshold']
+            if _x < 1 or _x > 10:
+                raise Exception("Healthy threshold out of range")
+            elif _y < 1 or _y > 10:
+                raise Exception("Unhealthy threshold out of range")
+            listen_port = allocate_listen_port()
+            if listen_port > 65535:
+                raise Exception("Max listen port exceeded")
+            kwargs['listen_port'] = listen_port
+        elif protocol == "http":
+            kwargs['listen_port'] = 80
+            hsns = filter(lambda x: x, map(lambda y: y.strip(),
+                                           kwargs.get('http_server_names',
+                                                      [])))
+            if not hsns:
+                raise Exception('HTTP server name absent' % h)
+            kwargs['http_server_names'] = hsns
+            cnt = cu.execute(select_http_server_names, kwargs)
+            acc_http_server_names = map(lambda x: x['id'], cu.fetchall())
+            for h in hsns:
+                if h in acc_http_server_names:
+                    raise Exception('%s server name already exists' % h)
+        else:
+            raise Exception("Invalid protocol")
+        update_lb_config(*args, **kwargs)
+    if protocol == "http":
+        update_lb_http_server_names(*args, **kwargs)
+    update_lb_instances(*args, **kwargs)
+
+def read_lb(allow_deleted=False, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
     cnt = cu.execute(select_lb, kwargs)
     lb = cu.fetchone()
+    if not allow_deleted and lb['deleted']:
+        raise Exception("Load balancer does not exist")
     cnt = cu.execute(select_lb_instances, kwargs)
     uuids = cu.fetchall()
     lb['instance_uuids'] = map(lambda x: x['uuid'], uuids)
@@ -173,6 +215,12 @@ def read_lb(*args, **kwargs):
     return lb
 
 def read_lb_list(*args, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
     cnt = cu.execute(select_lb_list, kwargs)
     lb_list = cu.fetchall()
     return {"load_balancer_list": lb_list,
@@ -180,8 +228,27 @@ def read_lb_list(*args, **kwargs):
             "tenant": kwargs.get("tenant")}
 
 def update_lb_config(*args, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        'protocol',
+        'balancing_method',
+        'health_check_timeout_ms',
+        'health_check_interval_ms',
+        'health_check_target_path',
+        'health_check_fail_count',
+        'health_check_healthy_threshold',
+        'health_check_unhealthy_threshold',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
+    if kwargs.get('balancing_method') not in ["round_robin", "source_binding"]:
+        raise Exception("Invalid balancing method")
     if kwargs.get('listen_port') is None:
-        kwargs['listen_port'] = 80
+        lb_info = read_lb(*args, **kwargs)
+        kwargs['listen_port'] = lb_info['listen_port']
+        kwargs['instance_port'] = lb_info['instance_port']
     if kwargs.get('protocol') == 'http':
         kwargs['health_check_healthy_threshold'] = 0
         kwargs['health_check_unhealthy_threshold'] = 0
@@ -203,6 +270,15 @@ def update_lb_config(*args, **kwargs):
     db.commit()
 
 def update_lb_instances(*args, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        'protocol',
+        'instance_uuids',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
     cnt = cu.execute(delete_instances, kwargs)
     db.commit()
     uuids = kwargs.get('instance_uuids', [])
@@ -217,11 +293,24 @@ def update_lb_instances(*args, **kwargs):
 
 
 def update_lb_http_server_names(*args, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        'protocol',
+        'http_server_names',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
+    protocol = kwargs['protocol']
+    if protocol != "http":
+        return
     cnt = cu.execute(select_http_server_names, kwargs)
     acc_http_server_names = map(lambda x: x['id'], cu.fetchall())
     cnt = cu.execute(select_lb_servernames, kwargs)
     bcc_http_server_names = map(lambda x: x['id'], cu.fetchall())
-    acc_http_server_names = filter(lambda x: x not in bcc_http_server_names, acc_http_server_names)
+    acc_http_server_names = filter(lambda x: x not in bcc_http_server_names,
+                                                      acc_http_server_names)
     hsns = kwargs.get('http_server_names', [])
     for h in hsns:
         if h in acc_http_server_names:
@@ -236,13 +325,27 @@ def update_lb_http_server_names(*args, **kwargs):
     db.commit()
 
 def delete_lb(*args, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
     cnt = cu.execute(delete_lb_config, kwargs)
     cnt = cu.execute(delete_instances, kwargs)
     cnt = cu.execute(delete_http_server_names, kwargs)
     db.commit()
 
 def read_whole_lb(*args, **kwargs):
-    lb_info = read_lb(*args, **kwargs)
+    exp_keys = [
+        'user_name',
+        'tenant',
+        'load_balancer_id',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
+    lb_info = read_lb(allow_deleted=True, **kwargs)
     instance_ips = list()
     for uuid in lb_info.get('instance_uuids', []):
         cnt = cu.execute(select_fixed_ips, uuid)
@@ -250,3 +353,27 @@ def read_whole_lb(*args, **kwargs):
         instance_ips.extend(map(lambda x: x['address'], ips))
     lb_info['instance_ips'] = instance_ips
     return lb_info
+
+def allocate_listen_port():
+    cnt = cu.execute(select_max_port)
+    res = cu.fetchone()
+    if res:
+        max_port = res['max_port']
+    else:
+        max_port = 10000
+    cnt = cu.execute(select_max_del_port)
+    res = cu.fetchone()
+    if res:
+        max_del_port = res['max_del_port']
+    else:
+        max_port = 65535
+    return min(max_port, max_del_port)
+
+def read_load_balancer_id_all(*args, **kwargs):
+    cnt = cu.execute(select_lb_ids, kwargs)
+    return {"load_balancer_ids": map(lambda x: x['load_balancer_id'],
+                                     cu.fetchall())}
+
+def read_http_server_name_all(*args, **kwargs):
+    cnt = cu.execute(select_http_server_names, kwargs)
+    return {"http_server_names": map(lambda x: x['id'], cu.fetchall())}

@@ -6,6 +6,8 @@
 
 import json
 import sys
+import traceback
+
 import zmq
 
 import db
@@ -78,6 +80,7 @@ while True:
             else:
                 raise Exception("Invalid command")
         except Exception, e:
+            print traceback.format_exc()
             cli_msg = {'code': 500, 'desc': str(e)}
         print ">> to client %s %s -> %s" % (msg_id, cmd, cli_msg)
         print
