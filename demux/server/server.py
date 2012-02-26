@@ -30,13 +30,6 @@ poller = zmq.Poller()
 poller.register(handler, zmq.POLLIN | zmq.POLLOUT)
 poller.register(feedback, zmq.POLLIN)
 
-msg_type = None
-msg_id = None
-msg_json = None
-msg_body = None
-code = 0
-desc = "OK"
-
 
 def get_work_msg(cmd, **msg):
     res = db.read_whole_lb(**msg)
@@ -52,28 +45,19 @@ while True:
     if socks.get(handler) == zmq.POLLIN:
         msg_type, msg_id, msg_json = handler.recv_multipart()
         msg_body = json.loads(msg_json)
-    if socks.get(handler) == zmq.POLLOUT:
-        cli_msg = None
-        work_msg = None
+        cli_msg = {'code': 200, 'desc': 'OK'}
         try:
             cmd = msg_body['cmd']
             msg = msg_body['msg']
-            print "---------------------------------------------------"
-            print
-            print ">> from client %s -> %s" % (cmd, msg)
-            print
             # access db and get return msg
-            cli_msg = {'code': 200, 'desc': 'OK'}
             if cmd in ['read_lb', 'read_lb_list']:
-                db_res = getattr(db, cmd)(**msg)
+                db_res = db.execute(cmd, **msg)
                 cli_msg.update(db_res)
             elif cmd in ['create_lb', 'delete_lb', 'update_lb_config',
                          'update_lb_instances', 'update_lb_http_server_names']:
-                getattr(db, cmd)(**msg)
+                db.execute(cmd, **msg)
                 work_cmd = "update_lb" if cmd.startswith("update_lb") else cmd
                 work_msg = get_work_msg(cmd, **msg)
-                print ">> to worker %s %s -> %s" % (msg_id, work_cmd, work_msg)
-                print
                 broadcast.send_multipart([msg_type, msg_id,
                                           json.dumps({'cmd': work_cmd,
                                                       'msg': work_msg})])
@@ -81,9 +65,8 @@ while True:
                 raise Exception("Invalid command")
         except Exception, e:
             print traceback.format_exc()
-            cli_msg = {'code': 500, 'desc': str(e)}
-        print ">> to client %s %s -> %s" % (msg_id, cmd, cli_msg)
-        print
+            cli_msg['code'] = 500
+            cli_msg['desc'] = str(e)
         handler.send_multipart([msg_type, msg_id,
                                 json.dumps({'cmd': cmd,
                                             'msg': cli_msg})])
