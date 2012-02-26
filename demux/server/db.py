@@ -7,7 +7,7 @@ import MySQLdb.cursors
 
 rlock = threading.RLock()
 
-conn = MySQLdb.connect(host="172.16.156.10", passwd="c8cI6Li0NuJ6",
+conn = MySQLdb.connect(host="localhost", passwd="sina2012",
                        user="root", db="nova",
                        cursorclass=MySQLdb.cursors.DictCursor) 
 cu = conn.cursor()
