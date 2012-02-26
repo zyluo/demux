@@ -7,10 +7,10 @@ import MySQLdb.cursors
 
 rlock = threading.RLock()
 
-db = MySQLdb.connect(host="localhost", passwd="passwd",
-                   user="nova", db="nova",
-                   cursorclass=MySQLdb.cursors.DictCursor) 
-cu = db.cursor()
+conn = MySQLdb.connect(host="172.16.156.10", passwd="c8cI6Li0NuJ6",
+                       user="root", db="nova",
+                       cursorclass=MySQLdb.cursors.DictCursor) 
+cu = conn.cursor()
 
 select_max_port = ("SELECT MAX(listen_port)+1 as max_port FROM load_balancer "
                    "WHERE deleted is FALSE "
@@ -24,6 +24,10 @@ select_max_del_port = ("SELECT MAX(listen_port) as max_del_port "
 select_http_server_names = ("SELECT id FROM http_server_name "
                             "WHERE deleted is FALSE;")
 
+select_lb_ids = ("SELECT id as load_balacer_id FROM load_balancer "
+                 "WHERE deleted is FALSE "
+                         "AND id=%(load_balancer_id)s")
+
 select_lb = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                     "id as load_balancer_id, protocol, "
                     "listen_port, instance_port, balancing_method, "
@@ -32,9 +36,7 @@ select_lb = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                     "health_check_healthy_threshold, "
                     "health_check_unhealthy_threshold "
              "FROM load_balancer lb "
-             #"WHERE deleted is FALSE "
-                     #"AND user_id=%(user_name)s "
-                     "WHERE user_id=%(user_name)s "
+             "WHERE user_id=%(user_name)s "
                      "AND project_id=%(tenant)s "
                      "AND id=%(load_balancer_id)s;")
 
@@ -45,10 +47,6 @@ select_lb_list = ("SELECT id as load_balancer_id, protocol, listen_port, "
                         "AND user_id=%(user_name)s "
                         "AND project_id=%(tenant)s;")
 
-select_lb_ids = ("SELECT id as load_balacer_id FROM load_balancer "
-                 "WHERE deleted is FALSE "
-                         "AND id=%(load_balancer_id)s")
-
 cnt_lb = ("SELECT COUNT(*) as lb_cnt FROM load_balancer "
           "WHERE deleted is FALSE "
                   "AND id=%(load_balancer_id)s")
@@ -57,7 +55,7 @@ hard_delete_lb_config = ("DELETE FROM load_balancer "
                          "WHERE id=%(load_balancer_id)s;")
 
 delete_lb_config = ("UPDATE load_balancer SET deleted=True "
-             "WHERE id=%(load_balancer_id)s;")
+                    "WHERE id=%(load_balancer_id)s;")
 
 delete_instances = ("UPDATE load_balancer_instance_association "
                     "SET deleted=True "
@@ -71,23 +69,24 @@ select_fixed_ips = ("SELECT j.address FROM instances i, fixed_ips j "
                             "AND i.id=j.instance_id "
                             "AND i.uuid=%s;")
 
-select_lb_instances = ("SELECT i.uuid FROM instances i,"
-                               "load_balancer_instance_association a "
-                       "WHERE i.deleted is FALSE "
-                               "AND a.deleted is FALSE "
-                               "AND i.id=a.instance_id "
-                               "AND a.load_balancer_id=%(load_balancer_id)s;")
-
 select_lb_servernames = ("SELECT id FROM http_server_name "
                          "WHERE deleted is FALSE "
                                  "AND load_balancer_id=%(load_balancer_id)s")
 
-select_instance_by_uuid = ("SELECT id AS instance_id "
-                              "FROM instances "
-                              "WHERE deleted=FALSE "
-                                      "AND uuid=%(instance_uuid)s;")
+select_lb_instance_uuids = ("SELECT i.uuid FROM instances i,"
+                                    "load_balancer_instance_association a "
+                            "WHERE i.deleted is FALSE "
+                                    "AND a.deleted is FALSE "
+                                    "AND i.id=a.instance_id "
+                                    "AND a.load_balancer_id="
+                                        "%(load_balancer_id)s;")
 
-_update_lb_cfg = ("INSERT INTO load_balancer "
+select_instance_by_uuid = ("SELECT id AS instance_id "
+                           "FROM instances "
+                           "WHERE deleted=FALSE "
+                                   "AND uuid=%(instance_uuid)s;")
+
+_create_lb_cfg = ("INSERT INTO load_balancer "
                               "(deleted, id, user_id, project_id, protocol, "
                               "listen_port, instance_port, balancing_method, "
                               "health_check_timeout_ms, "
@@ -105,9 +104,10 @@ _update_lb_cfg = ("INSERT INTO load_balancer "
                                 "%(health_check_target_path)s, "
                                 "%(health_check_fail_count)s, "
                                 "%(health_check_healthy_threshold)s, "
-                                "%(health_check_unhealthy_threshold)s) "
-                  "ON DUPLICATE KEY UPDATE "
-                      "balancing_method=%(balancing_method)s, "
+                                "%(health_check_unhealthy_threshold)s);")
+
+_update_lb_cfg = ("UPDATE load_balancer "
+                  "SET balancing_method=%(balancing_method)s, "
                       "health_check_timeout_ms=%(health_check_timeout_ms)s, "
                       "health_check_interval_ms=%(health_check_interval_ms)s, "
                       "health_check_target_path=%(health_check_target_path)s, "
@@ -115,7 +115,8 @@ _update_lb_cfg = ("INSERT INTO load_balancer "
                       "health_check_healthy_threshold="
                               "%(health_check_healthy_threshold)s, "
                       "health_check_unhealthy_threshold="
-                              "%(health_check_unhealthy_threshold)s;")
+                              "%(health_check_unhealthy_threshold)s "
+                  "WHERE id=%(load_balancer_id)s;")
 
 _update_lb_instance = ("INSERT INTO load_balancer_instance_association "
                               "(deleted, load_balancer_id, instance_id) "
@@ -154,7 +155,7 @@ def create_lb(*args, **kwargs):
     if lb_cnt:
         raise Exception('Load balancer name already exists')
     cnt = cu.execute(hard_delete_lb_config, kwargs)
-    db.commit()
+    conn.commit()
 
     if kwargs['instance_port'] < 1 or kwargs['instance_port'] > 65535:
         raise Exception("Instance port out of range")
@@ -186,12 +187,13 @@ def create_lb(*args, **kwargs):
                     raise Exception('%s server name already exists' % h)
         else:
             raise Exception("Invalid protocol")
-        update_lb_config(*args, **kwargs)
+        cnt = cu.execute(_create_lb_cfg, kwargs)
+        conn.commit()
     if protocol == "http":
         update_lb_http_server_names(*args, **kwargs)
     update_lb_instances(*args, **kwargs)
 
-def read_lb(allow_deleted=False, **kwargs):
+def read_lb(*args, **kwargs):
     exp_keys = [
         'user_name',
         'tenant',
@@ -203,7 +205,7 @@ def read_lb(allow_deleted=False, **kwargs):
     lb = cu.fetchone()
     if not allow_deleted and lb['deleted']:
         raise Exception("Load balancer does not exist")
-    cnt = cu.execute(select_lb_instances, kwargs)
+    cnt = cu.execute(select_lb_instance_uuids, kwargs)
     uuids = cu.fetchall()
     lb['instance_uuids'] = map(lambda x: x['uuid'], uuids)
     if lb['protocol'] == 'http':
@@ -215,6 +217,7 @@ def read_lb(allow_deleted=False, **kwargs):
     return lb
 
 def read_lb_list(*args, **kwargs):
+    conn.ping()
     exp_keys = [
         'user_name',
         'tenant',
@@ -267,7 +270,7 @@ def update_lb_config(*args, **kwargs):
     else:
         raise Exception("Invalid protocol")
     cnt = cu.execute(_update_lb_cfg, kwargs)
-    db.commit()
+    conn.commit()
 
 def update_lb_instances(*args, **kwargs):
     exp_keys = [
@@ -280,7 +283,7 @@ def update_lb_instances(*args, **kwargs):
     assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
 
     cnt = cu.execute(delete_instances, kwargs)
-    db.commit()
+    conn.commit()
     uuids = kwargs.get('instance_uuids', [])
     for uuid in uuids:
         cnt = cu.execute(select_instance_by_uuid, {'instance_uuid': uuid})
@@ -289,7 +292,7 @@ def update_lb_instances(*args, **kwargs):
             cnt = cu.execute(_update_lb_instance,
                              {'instance_id': asdf,
                               'load_balancer_id': kwargs['load_balancer_id']})
-    db.commit()
+    conn.commit()
 
 
 def update_lb_http_server_names(*args, **kwargs):
@@ -316,13 +319,13 @@ def update_lb_http_server_names(*args, **kwargs):
         if h in acc_http_server_names:
             raise Exception('%s server name already exists' % h)
     cnt = cu.execute(delete_http_server_names, kwargs)
-    db.commit()
+    conn.commit()
     https = kwargs.get('http_server_names', [])
     for h in https:
         cnt = cu.execute(_update_lb_http_server_name,
                          {'http_server_name': h,
                           'load_balancer_id': kwargs['load_balancer_id']})
-    db.commit()
+    conn.commit()
 
 def delete_lb(*args, **kwargs):
     exp_keys = [
@@ -335,7 +338,7 @@ def delete_lb(*args, **kwargs):
     cnt = cu.execute(delete_lb_config, kwargs)
     cnt = cu.execute(delete_instances, kwargs)
     cnt = cu.execute(delete_http_server_names, kwargs)
-    db.commit()
+    conn.commit()
 
 def read_whole_lb(*args, **kwargs):
     exp_keys = [
@@ -345,7 +348,7 @@ def read_whole_lb(*args, **kwargs):
         ]
     assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
 
-    lb_info = read_lb(allow_deleted=True, **kwargs)
+    lb_info = read_lb(*args, **kwargs)
     instance_ips = list()
     for uuid in lb_info.get('instance_uuids', []):
         cnt = cu.execute(select_fixed_ips, uuid)

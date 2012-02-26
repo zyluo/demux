@@ -51,11 +51,11 @@ while True:
             msg = msg_body['msg']
             # access db and get return msg
             if cmd in ['read_lb', 'read_lb_list']:
-                db_res = db.execute(cmd, **msg)
+                db_res = getattr(db, cmd)(**msg)
                 cli_msg.update(db_res)
             elif cmd in ['create_lb', 'delete_lb', 'update_lb_config',
                          'update_lb_instances', 'update_lb_http_server_names']:
-                db.execute(cmd, **msg)
+                getattr(db, cmd)(**msg)
                 work_cmd = "update_lb" if cmd.startswith("update_lb") else cmd
                 work_msg = get_work_msg(cmd, **msg)
                 broadcast.send_multipart([msg_type, msg_id,
