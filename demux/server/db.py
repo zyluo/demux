@@ -38,8 +38,7 @@ select_http_server_names = ("SELECT id FROM http_server_name "
                             "WHERE deleted is FALSE;")
 
 select_lb_ids = ("SELECT id as load_balacer_id FROM load_balancer "
-                 "WHERE deleted is FALSE "
-                         "AND id=%(load_balancer_id)s")
+                 "WHERE deleted is FALSE;")
 
 select_lb_cfg = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                         "id as load_balancer_id, protocol, "
