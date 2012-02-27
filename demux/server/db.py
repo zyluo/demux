@@ -44,7 +44,7 @@ select_lb_cfg = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                         "id as load_balancer_id, protocol, "
                         "listen_port, instance_port, balancing_method, "
                         "health_check_timeout_ms, health_check_interval_ms, "
-                        "health_check_target_path, health_check_fail_count, "
+                        "health_check_target_path, "
                         "health_check_healthy_threshold, "
                         "health_check_unhealthy_threshold "
                  "FROM load_balancer lb "
@@ -100,7 +100,6 @@ _create_lb_cfg = ("INSERT INTO load_balancer "
                               "health_check_timeout_ms, "
                               "health_check_interval_ms, "
                               "health_check_target_path, "
-                              "health_check_fail_count, "
                               "health_check_healthy_threshold, "
                               "health_check_unhealthy_threshold) "
                   "VALUES (FALSE, %(load_balancer_id)s, %(user_name)s, "
@@ -110,7 +109,6 @@ _create_lb_cfg = ("INSERT INTO load_balancer "
                                 "%(health_check_timeout_ms)s, "
                                 "%(health_check_interval_ms)s, "
                                 "%(health_check_target_path)s, "
-                                "%(health_check_fail_count)s, "
                                 "%(health_check_healthy_threshold)s, "
                                 "%(health_check_unhealthy_threshold)s);")
 
@@ -123,7 +121,6 @@ _update_lb_cfg = ("UPDATE load_balancer "
                       "health_check_timeout_ms=%(health_check_timeout_ms)s, "
                       "health_check_interval_ms=%(health_check_interval_ms)s, "
                       "health_check_target_path=%(health_check_target_path)s, "
-                      "health_check_fail_count=%(health_check_fail_count)s, "
                       "health_check_healthy_threshold="
                               "%(health_check_healthy_threshold)s, "
                       "health_check_unhealthy_threshold="
@@ -163,7 +160,6 @@ def create_lb(*args, **kwargs):
         'health_check_timeout_ms',
         'health_check_interval_ms',
         'health_check_target_path',
-        'health_check_fail_count',
         'health_check_healthy_threshold',
         'health_check_unhealthy_threshold',
         'instance_uuids',
@@ -260,7 +256,6 @@ def update_lb_config(*args, **kwargs):
         'health_check_timeout_ms',
         'health_check_interval_ms',
         'health_check_target_path',
-        'health_check_fail_count',
         'health_check_healthy_threshold',
         'health_check_unhealthy_threshold',
         ]
@@ -272,11 +267,8 @@ def update_lb_config(*args, **kwargs):
         kwargs['health_check_target_path'] = kwargs.get(
                                              'health_check_target_path',
                                              '/')
-        kwargs['health_check_fail_count'] = kwargs.get(
-                                            'health_check_fail_count', 0)
     elif kwargs.get('protocol') == 'tcp':
         kwargs['health_check_target_path'] = ""
-        kwargs['health_check_fail_count'] = 0
         if not 1 <= kwargs['health_check_healthy_threshold'] <= 10:
             raise Exception("Healthy threshold out of range")
         elif not 1 <= kwargs['health_check_unhealthy_threshold'] <= 10:
@@ -388,7 +380,13 @@ def allocate_listen_port():
     return min(max_port, del_port)
 
 def read_load_balancer_id_all(*args, **kwargs):
-    cnt = cu.execute(select_lb_ids, kwargs)
+    exp_keys = [
+        'user_name',
+        'tenant',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
+    cnt = cu.execute(select_lb_ids)
     return {"load_balancer_ids": map(lambda x: x['load_balancer_id'],
                                      cu.fetchall())}
 
@@ -397,4 +395,10 @@ def _read_http_server_name_all():
     return map(lambda x: x['id'], cu.fetchall())
 
 def read_http_server_name_all(*args, **kwargs):
+    exp_keys = [
+        'user_name',
+        'tenant',
+        ]
+    assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
+
     return {"http_server_names": _read_http_server_name_all()}
