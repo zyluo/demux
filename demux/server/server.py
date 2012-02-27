@@ -49,8 +49,11 @@ while True:
         try:
             cmd = msg_body['cmd']
             msg = msg_body['msg']
+            print cmd, msg
+            print
             # access db and get return msg
-            if cmd in ['read_lb', 'read_lb_list']:
+            if cmd in ['read_lb', 'read_lb_list', 'read_load_balancer_id_all',
+                       'read_http_server_name_all']:
                 db_res = getattr(db, cmd)(**msg)
                 cli_msg.update(db_res)
             elif cmd in ['create_lb', 'delete_lb', 'update_lb_config',
@@ -67,6 +70,8 @@ while True:
             print traceback.format_exc()
             cli_msg['code'] = 500
             cli_msg['desc'] = str(e)
+        print cmd, cli_msg
+        print
         handler.send_multipart([msg_type, msg_id,
                                 json.dumps({'cmd': cmd,
                                             'msg': cli_msg})])
