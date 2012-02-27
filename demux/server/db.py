@@ -17,7 +17,7 @@ def get_conn():
     try:
         conn.ping()
     except Exception:
-        conn = MySQLdb.connect(host="172.16.156.10", passwd="c8cI6Li0NuJ6",
+        conn = MySQLdb.connect(host="localhost", passwd="passwd",
                                user="root", db="nova",
                                cursorclass=MySQLdb.cursors.DictCursor) 
         cu = conn.cursor()
