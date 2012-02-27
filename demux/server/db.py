@@ -52,8 +52,11 @@ select_lb_cfg = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                          "AND project_id=%(tenant)s "
                          "AND id=%(load_balancer_id)s;")
 
-select_lb_list = ("SELECT id as load_balancer_id, protocol, listen_port, "
-                               "instance_port "
+select_lb_list = ("SELECT id as load_balancer_id, protocol, balancing_method, "
+                         "health_check_timeout_ms, health_check_interval_ms, "
+                         "health_check_target_path, "
+                         "health_check_healthy_threshold, "
+                         "health_check_unhealthy_threshold "
                   "FROM load_balancer "
                   "WHERE deleted is FALSE "
                         "AND user_id=%(user_name)s "
@@ -242,6 +245,15 @@ def read_lb_list(*args, **kwargs):
 
     cnt = cu.execute(select_lb_list, kwargs)
     lb_list = cu.fetchall()
+    for lb_dict in lb_list:
+        cnt = cu.execute(select_lb_instance_uuids, lb_dict)
+        uuids = cu.fetchall()
+        lb_dict['instance_uuids'] = map(lambda x: x['uuid'], uuids)
+        if lb_dict['protocol'] == 'http':
+            lb_dict['http_server_names'] = _select_lb_http_server_names(*args,
+                                                                    **lb_dict)
+        else:
+            lb_dict['http_server_names'] = []
     return {"load_balancer_list": lb_list,
             "user_name": kwargs.get("user_name"),
             "tenant": kwargs.get("tenant")}
