@@ -24,15 +24,8 @@ def get_conn():
 
 get_conn()
 
-select_max_port = ("SELECT MAX(listen_port)+1 as max_port FROM load_balancer "
-                   "WHERE deleted is FALSE "
-                       "AND listen_port >= 10000;")
-
-select_del_port = ("SELECT listen_port as del_port "
-                   "FROM load_balancer "
-                   "WHERE deleted is TRUE "
-                           "AND listen_port >= 10000 "
-                   "LIMIT 1;")
+select_listen_port = ("SELECT deleted, listen_port FROM load_balancer "
+                      "WHERE listen_port >= 10000;")
 
 select_http_server_names = ("SELECT id FROM http_server_name "
                             "WHERE deleted is FALSE;")
@@ -62,9 +55,6 @@ select_lb_list = ("SELECT id as load_balancer_id, protocol, "
                   "WHERE deleted is FALSE "
                         "AND user_id=%(user_name)s "
                         "AND project_id=%(tenant)s;")
-
-hard_delete_lb_config = ("DELETE FROM load_balancer "
-                         "WHERE id=%(load_balancer_id)s;")
 
 delete_lb_config = ("UPDATE load_balancer SET deleted=True "
                     "WHERE id=%(load_balancer_id)s;")
@@ -386,19 +376,19 @@ def read_whole_lb(*args, **kwargs):
     return lb_info
 
 def allocate_listen_port():
-    cnt = cu.execute(select_max_port)
-    res = cu.fetchone() or dict()
-    if res.get('max_port'):
-        max_port = res.get('max_port')
+    cnt = cu.execute(select_listen_port)
+    res = cu.fetchall()
+    used_ports = map(lambda x: x['listen_port'],
+                     filter(lambda y: not y['deleted'], res))
+    available_ports = filter(lambda x: x not in used_ports,
+                             map(lambda y: y['listen_port'],
+                                 filter(lambda z: z['deleted'], res)))
+    if available_ports:
+        return available_ports[0]
+    elif used_ports:
+        return max(used_ports) + 1
     else:
-        max_port = 10000
-    cnt = cu.execute(select_del_port)
-    res = cu.fetchone() or dict()
-    if res.get('del_port'):
-        del_port = res.get('del_port')
-    else:
-        del_port = 65535
-    return min(max_port, del_port)
+        return 10000
 
 def read_load_balancer_id_all(*args, **kwargs):
     exp_keys = [
