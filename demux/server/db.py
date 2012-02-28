@@ -368,8 +368,10 @@ def read_whole_lb(*args, **kwargs):
     assert(all(map(lambda x: x in kwargs.keys(), exp_keys)))
 
     lb_info = _read_lb_cfg(*args, **kwargs)
+    cnt = cu.execute(select_lb_instance_uuids, kwargs)
+    uuids = map(lambda x: x['uuid'], cu.fetchall())
     instance_ips = list()
-    for uuid in lb_info.get('instance_uuids', []):
+    for uuid in uuids:
         cnt = cu.execute(select_fixed_ips, uuid)
         ips = cu.fetchall()
         instance_ips.extend(map(lambda x: x['address'], ips))

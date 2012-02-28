@@ -61,6 +61,8 @@ while True:
                 getattr(db, cmd)(**msg)
                 work_cmd = "update_lb" if cmd.startswith("update_lb") else cmd
                 work_msg = get_work_msg(cmd, **msg)
+                print ">>>>>>>>>", work_msg
+                print
                 broadcast.send_multipart([msg_type, msg_id,
                                           json.dumps({'cmd': work_cmd,
                                                       'msg': work_msg})])
