@@ -52,7 +52,8 @@ select_lb_cfg = ("SELECT deleted, user_id as user_name, project_id as tenant, "
                          "AND project_id=%(tenant)s "
                          "AND id=%(load_balancer_id)s;")
 
-select_lb_list = ("SELECT id as load_balancer_id, protocol, balancing_method, "
+select_lb_list = ("SELECT id as load_balancer_id, protocol, "
+                         "listen_port, instance_port, balancing_method, "
                          "health_check_timeout_ms, health_check_interval_ms, "
                          "health_check_target_path, "
                          "health_check_healthy_threshold, "
