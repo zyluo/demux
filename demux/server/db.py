@@ -377,6 +377,12 @@ def read_whole_lb(*args, **kwargs):
         ips = cu.fetchall()
         instance_ips.extend(map(lambda x: x['address'], ips))
     lb_info['instance_ips'] = instance_ips
+    lb_info['instance_uuids'] = uuids
+    if lb_info['protocol'] == 'http':
+        lb_info['http_server_names'] = _select_lb_http_server_names(*args,
+                                                                   **kwargs)
+    else:
+        lb_info['http_server_names'] = []
     return lb_info
 
 def allocate_listen_port():
