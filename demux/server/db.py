@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import ConfigParser
 import threading
 
 import MySQLdb
@@ -17,15 +18,16 @@ def get_conn():
     try:
         conn.ping()
     except Exception:
-        conn = MySQLdb.connect(host="localhost", passwd="passwd",
-                               user="root", db="nova",
-                               cursorclass=MySQLdb.cursors.DictCursor) 
+        config = ConfigParser.ConfigParser()
+        config.read("demux.conf")
+        conn = MySQLdb.connect(cursorclass=MySQLdb.cursors.DictCursor,
+                               **dict(config.items('MySQL')))
         cu = conn.cursor()
 
 get_conn()
 
 select_listen_port = ("SELECT deleted, listen_port FROM load_balancer "
-                      "WHERE listen_port >= 10000;")
+                      "WHERE listen_port >= 11000;")
 
 select_http_server_names = ("SELECT id FROM http_server_name "
                             "WHERE deleted is FALSE;")
@@ -388,7 +390,7 @@ def allocate_listen_port():
     elif used_ports:
         return max(used_ports) + 1
     else:
-        return 10000
+        return 11000
 
 def read_load_balancer_id_all(*args, **kwargs):
     exp_keys = [
