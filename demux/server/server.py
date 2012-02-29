@@ -4,6 +4,7 @@
 #
 # Author: Lev Givon <lev(at)columbia(dot)edu>
 
+import ConfigParser
 import json
 import sys
 import traceback
@@ -12,19 +13,23 @@ import zmq
 
 import db
 
+config = ConfigParser.ConfigParser()
+config.read("demux.conf")
+server_cfg = dict(config.items('Demux'))
+
 context = zmq.Context()
 
 # Socket to receive messages on
 handler = context.socket(zmq.REP)
-handler.bind("tcp://*:5557")
+handler.bind("tcp://%(handler_host)s:%(handler_port)s" % server_cfg)
 
 # Socket to send messages on
 broadcast = context.socket(zmq.PUB)
-broadcast.bind("tcp://*:5558")
+handler.bind("tcp://%(broadcast_host)s:%(broadcast_port)s" % server_cfg)
 
 # Socket with direct access to the feedback: used to syncronize start of batch
 feedback = context.socket(zmq.PULL)
-feedback.bind("tcp://*:5559")
+handler.bind("tcp://%(feedback_host)s:%(feedback_port)s" % server_cfg)
 
 poller = zmq.Poller()
 poller.register(handler, zmq.POLLIN | zmq.POLLOUT)
