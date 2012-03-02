@@ -25,11 +25,11 @@ handler.bind("tcp://%(handler_host)s:%(handler_port)s" % server_cfg)
 
 # Socket to send messages on
 broadcast = context.socket(zmq.PUB)
-handler.bind("tcp://%(broadcast_host)s:%(broadcast_port)s" % server_cfg)
+broadcast.bind("tcp://%(broadcast_host)s:%(broadcast_port)s" % server_cfg)
 
 # Socket with direct access to the feedback: used to syncronize start of batch
 feedback = context.socket(zmq.PULL)
-handler.bind("tcp://%(feedback_host)s:%(feedback_port)s" % server_cfg)
+feedback.bind("tcp://%(feedback_host)s:%(feedback_port)s" % server_cfg)
 
 poller = zmq.Poller()
 poller.register(handler, zmq.POLLIN | zmq.POLLOUT)
